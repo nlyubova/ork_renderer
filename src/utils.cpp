@@ -37,6 +37,8 @@
 #include <object_recognition_renderer/renderer.h>
 #include <object_recognition_renderer/utils.h>
 
+#include <iostream>
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 RendererIterator::RendererIterator(Renderer *renderer, size_t n_points)
@@ -74,7 +76,15 @@ RendererIterator::operator++()
 }
 
 void
-RendererIterator::render(cv::Mat &image_out, cv::Mat &depth_out, cv::Mat &mask_out)
+RendererIterator::reinit()
+{
+  index_ = 0;
+  angle_ = angle_min_;
+  radius_ = radius_min_;
+}
+
+void
+RendererIterator::render(cv::Mat &image_out, cv::Mat &depth_out, cv::Mat &mask_out, cv::Rect &rect_out)
 {
   if (isDone())
     return;
@@ -83,24 +93,52 @@ RendererIterator::render(cv::Mat &image_out, cv::Mat &depth_out, cv::Mat &mask_o
   view_params(t, up);
 
   renderer_->lookAt(t(0), t(1), t(2), up(0), up(1), up(2));
-  renderer_->render(image_out, depth_out, mask_out);
+  renderer_->render(image_out, depth_out, mask_out, rect_out);
+}
+
+void
+RendererIterator::render_known(const cv::Vec3d t_in, cv::Mat &image_out, cv::Mat &depth_out, cv::Mat &mask_out, cv::Rect &rect_out)
+{
+  cv::Vec3d up, t(t_in);
+  view_params_known(t, up);
+  renderer_->lookAt(t(0), t(1), t(2), up(0), up(1), up(2));
+  renderer_->render(image_out, depth_out, mask_out, rect_out);
+}
+
+cv::Vec3d
+RendererIterator::T_known(const cv::Vec3d t_in)
+{
+  cv::Vec3d t(t_in), _up;
+  view_params_known(t, _up);
+
+  return -t;
 }
 
 /**
  * @return the rotation of the camera with respect to the current view point
  */
-
 cv::Matx33d
 RendererIterator::R() const
 {
-  cv::Vec3d t, up;
+  cv::Vec3d up, t;
   view_params(t, up);
-  cv::Vec3d t_normal = cv::Vec3d(t(0), t(1), t(2));
-  normalize_vector(t_normal(0),t_normal(1),t_normal(2));
+  normalize_vector(t(0),t(1),t(2));
 
-  cv::Vec3d y = t_normal.cross(up);
-  cv::Mat R_full = (cv::Mat_<double>(3, 3) << t(0), t(1), t(2), y(0), y(1), y(2), up(0), up(1), up(2));
+  // compute the left vector
+  cv::Vec3d y;
+  y = up.cross(t);  // cross product
+  normalize_vector(y(0),y(1),y(2));
+
+  // re-compute the orthonormal up vector
+  up = t.cross(y);  // cross product
+  normalize_vector(up(0), up(1), up(2));
+
+  cv::Mat R_full = (cv::Mat_<double>(3, 3) <<
+                    t(0), t(1), t(2),
+                    y(0), y(1), y(2),
+                    up(0), up(1), up(2));
   cv::Matx33d R = R_full;
+  R = R.t();
 
   return R;
 }
@@ -111,23 +149,70 @@ RendererIterator::R() const
 cv::Matx33d
 RendererIterator::R_obj() const
 {
-  cv::Vec3d t, up;
-  view_params(t, up, cv::Vec3d(1, 0, 0));
-  cv::Vec3d t_normal = cv::Vec3d(t(0), t(1), t(2));
-  normalize_vector(t_normal(0),t_normal(1),t_normal(2));
+  cv::Vec3d up, t;
+  view_params(t, up);
+  normalize_vector(t(0),t(1),t(2));
+
+  // compute the left vector
+  cv::Vec3d y;
+  y = up.cross(t);  // cross product
+  normalize_vector(y(0),y(1),y(2));
+
+  // re-compute the orthonormal up vector
+  up = t.cross(y);  // cross product
+  normalize_vector(up(0), up(1), up(2));
+
+  cv::Mat R_full = (cv::Mat_<double>(3, 3) <<
+                    -y(0), -y(1), -y(2),
+                    -up(0), -up(1), -up(2),
+                    t(0), t(1), t(2)
+                    );
+
+  cv::Matx33d R = R_full;
+  R = R.t();
+
+  return R.inv();
+}
+
+cv::Matx33d
+RendererIterator::R_cam_known(const cv::Vec3d t_in) const
+{
+  cv::Vec3d up, t(t_in);
+  view_params_known(t, up);
+
+  // compute the left vector
+  cv::Vec3d y;
+  y = up.cross(t);  // cross product
+  normalize_vector(y(0),y(1),y(2));
+
+  // re-calculate the orthonormal up vector
+  up = t.cross(y);  // cross product
+  normalize_vector(up(0), up(1), up(2));
+
+  //cv::Vec3d y = t.cross(up);
+  cv::Mat R_full = (cv::Mat_<double>(3, 3) << t(0), t(1), t(2), y(0), y(1), y(2), up(0), up(1), up(2));
+  cv::Matx33d R = R_full;
+
+  return R;
+}
+
+cv::Matx33d
+RendererIterator::R_obj_known(const cv::Vec3d t_in) const
+{
+  cv::Vec3d up, t(t_in);
+  view_params_known(t, up); //, cv::Vec3d(1, 0, 0)
+
+  cv::Vec3d t_normal(t(0), t(1), t(2));
+  //normalize_vector(t_normal(0),t_normal(1),t_normal(2));
+  normalize_vector(up(0),up(1),up(2));
 
   cv::Vec3d y = t_normal.cross(up);
   normalize_vector(y(0),y(1),y(2));
   normalize_vector(up(0),up(1),up(2));
 
-  cv::Mat R_full = (cv::Mat_<double>(3, 3) <<
-                    up(0), up(1), up(2),
-                    y(0), y(1), y(2),
-                    t(0), t(1), t(2)
-                    );
-  cv::Matx33d R = R_full;
-
-  return R;
+  return cv::Matx33d(t(0), t(1), t(2),
+                      y(0), y(1), y(2),
+                      up(0), up(1), up(2));
 }
 
 float
@@ -145,7 +230,7 @@ RendererIterator::T() const
   cv::Vec3d t, _up;
   view_params(t, _up);
 
-  return -t;
+  return -t; //t
 }
 
 /**
@@ -161,37 +246,110 @@ RendererIterator::n_templates() const
  * @param T the translation vector
  * @param up the up vector of the view point
  */
+
 void
 RendererIterator::view_params(cv::Vec3d &T, cv::Vec3d &up, cv::Vec3d T_coincide) const
 {
+  float angle_rad = angle_ * CV_PI / 180.;
+
   // from http://www.xsi-blog.com/archives/115
-  // Calculate Point(x, y ,z) on the sphere based on index_ and radius_ using Golden Spiral technique
   static float inc = CV_PI * (3 - sqrt(5));
-  static float off = 2.0 / float(n_points_);
-  float z = index_ * off - 1 + (off / 2);
-  float r = sqrt(1 - z * z);
+  static float off = 2.0f / float(n_points_);
+
+  float y = index_ * off - 1.0f + (off / 2.0f);
+  float r = sqrt(1.0f - y * y);
   float phi = index_ * inc;
   float x = std::cos(phi) * r;
-  float y = sin(phi) * r;
+  float z = std::sin(phi) * r;
+
+  //T = cv::Vec3d(x, y, z); //do not forget !!!!
+
+  float lat = std::acos(z), lon; //z
+  if ((fabs(std::sin(lat)) < 1e-5) || (fabs(y / std::sin(lat)) > 1)) //y
+    lon = 0;
+  else
+    lon = std::asin(y / std::sin(lat)); //y
+
+  x *= radius_; // * cos(lon) * sin(lat);
+  y *= radius_; //float y = radius * sin(lon) * sin(lat);
+  z *= radius_; //float z = radius * cos(lat);
+
+  T = cv::Vec3d(x, y, z); //do not forget !!!!
+
+  // Figure out the up vector
+  float x_up = radius_ * std::cos(lon) * std::sin(lat - 1e-5) - x;
+  float y_up = radius_ * std::sin(lon) * std::sin(lat - 1e-5) - y;
+  float z_up = radius_ * std::cos(lat - 1e-5) - z;
+  normalize_vector(x_up, y_up, z_up);
+
+  // Figure out the third vector of the basis
+  float x_right = -y_up * z + z_up * y;
+  float y_right = x_up * z - z_up * x;
+  float z_right = -x_up * y + y_up * x;
+  normalize_vector(x_right, y_right, z_right);
+
+  // Rotate the up vector in that basis
+  float x_new_up = x_up * std::cos(angle_rad) + x_right * std::sin(angle_rad);
+  float y_new_up = y_up * std::cos(angle_rad) + y_right * std::sin(angle_rad);
+  float z_new_up = z_up * std::cos(angle_rad) + z_right * std::sin(angle_rad);
+  up = cv::Vec3d(x_new_up, y_new_up, z_new_up);
+
+  // compute the left vector
+  cv::Vec3d l;
+  l = up.cross(T);  // cross product
+  normalize_vector(l(0),l(1),l(2));
+
+  up = T.cross(l);  // cross product
+  normalize_vector(up(0), up(1), up(2));
+}
+
+void
+RendererIterator::view_params_known(cv::Vec3d &T, cv::Vec3d &up, cv::Vec3d T_coincide) const
+{
+  float angle_rad = angle_ * CV_PI / 180.;
+
+  //------------------------------------
+  // simple from original method
+
+  //T *= -1;
+  float x = -T(0);
+  float y = -T(1);
+  float z = -T(2);
+
+  float lat = std::acos(z), lon; //z
+  if ((fabs(std::sin(lat)) < 1e-5) || (fabs(y / std::sin(lat)) > 1)) //y
+    lon = 0;
+  else
+    lon = std::asin(y / std::sin(lat)); //y
 
   x *= radius_; // * cos(lon) * sin(lat);
   y *= radius_; //float y = radius * sin(lon) * sin(lat);
   z *= radius_; //float z = radius * cos(lat);
 
   // Figure out the up vector
-  T = cv::Vec3d(x, y, z);
-  cv::Vec3d T_(T);
-  normalize_vector(T_(0),T_(1),T_(2));
+  float x_up = radius_ * std::cos(lon) * std::sin(lat - 1e-5) - x;
+  float y_up = radius_ * std::sin(lon) * std::sin(lat - 1e-5) - y;
+  float z_up = radius_ * std::cos(lat - 1e-5) - z;
+  normalize_vector(x_up, y_up, z_up);
 
   // Figure out the third vector of the basis
-  //get the up vector from the forward vector and the global up_vector(0,0,1) (i.e. coincide with the Z axis)
-  cv::Vec3d T_right = T_.cross(T_coincide);
-  normalize_vector(T_right(0), T_right(1), T_right(2));
-
-  cv::Vec3d T_up = T_right.cross(T_);
-  normalize_vector(T_up(0), T_up(1), T_up(2));
+  float x_right = -y_up * z + z_up * y;
+  float y_right = x_up * z - z_up * x;
+  float z_right = -x_up * y + y_up * x;
+  normalize_vector(x_right, y_right, z_right);
 
   // Rotate the up vector in that basis
-  float angle_rad = angle_ * CV_PI / 180.;
-  up = T_up * std::cos(angle_rad) + T_right * std::sin(angle_rad);
+  float x_new_up = x_up * std::cos(angle_rad) + x_right * std::sin(angle_rad);
+  float y_new_up = y_up * std::cos(angle_rad) + y_right * std::sin(angle_rad);
+  float z_new_up = z_up * std::cos(angle_rad) + z_right * std::sin(angle_rad);
+  up = cv::Vec3d(x_new_up, y_new_up, z_new_up);
+  //cv::Vec3d f(x, y, z);
+
+  // compute the left vector
+  cv::Vec3d l;
+  l = up.cross(T);  // cross product
+  normalize_vector(l(0),l(1),l(2));
+
+  up = T.cross(l);  // cross product
+  normalize_vector(up(0), up(1), up(2));
 }

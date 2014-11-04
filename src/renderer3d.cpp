@@ -165,7 +165,7 @@ Renderer3d::lookAt(double x, double y, double z, double upx, double upy, double 
 }
 
 void
-Renderer3d::render(cv::Mat &image_out, cv::Mat &depth_out, cv::Mat &mask_out) const
+Renderer3d::render(cv::Mat &image_out, cv::Mat &depth_out, cv::Mat &mask_out, cv::Rect &rect_out) const
 {
   // Create images to copy the buffers to
   cv::Mat_ < cv::Vec3b > image(height_, width_);
@@ -226,15 +226,15 @@ Renderer3d::render(cv::Mat &image_out, cv::Mat &depth_out, cv::Mat &mask_out) co
     --j_min;
   if (j_max < height_ - 1)
     ++j_max;
-  cv::Rect rect(i_min, j_min, i_max - i_min + 1, j_max - j_min + 1);
+  rect_out = cv::Rect(i_min, j_min, i_max - i_min + 1, j_max - j_min + 1);
 
-  if ((rect.width <=0) || (rect.height <= 0)) {
+  if ((rect_out.width <=0) || (rect_out.height <= 0)) {
     depth_out = cv::Mat();
     image_out = cv::Mat();
     mask_out = cv::Mat();
   } else {
-    depth_scale(rect).copyTo(depth_out);
-    image(rect).copyTo(image_out);
-    mask(rect).copyTo(mask_out);
+    depth_scale(rect_out).copyTo(depth_out);
+    image(rect_out).copyTo(image_out);
+    mask(rect_out).copyTo(mask_out);
   }
 }

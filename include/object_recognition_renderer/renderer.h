@@ -71,7 +71,7 @@ public:
    * @param mask_out the mask image
    */
   virtual void
-  render(cv::Mat &image_out, cv::Mat &depth_out, cv::Mat &mask_out) const = 0;
+  render(cv::Mat &image_out, cv::Mat &depth_out, cv::Mat &mask_out, cv::Rect &rect_out) const = 0;
 
 protected:
   unsigned int width_, height_;

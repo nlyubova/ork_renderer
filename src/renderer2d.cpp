@@ -89,7 +89,7 @@ void Renderer2d::lookAt(double x, double y, double z, double upx, double upy, do
   T_ = -R_*T_;
 }
 
-void Renderer2d::render(cv::Mat &image_out, cv::Mat &depth_out, cv::Mat &mask_out) const {
+void Renderer2d::render(cv::Mat &image_out, cv::Mat &depth_out, cv::Mat &mask_out, cv::Rect &rect_out) const {
   // Figure out the transform from an original image pixel to a projected pixel
   // original frame: 0 is the top left corner of the pattern, X goes right, Y down, Z away from the camera
   // projected frame: 0 is the center of the projection image, X goes right, Y up, Z towards the camera
@@ -183,9 +183,9 @@ void Renderer2d::render(cv::Mat &image_out, cv::Mat &depth_out, cv::Mat &mask_ou
     --j_min;
   if (j_max < height_ - 1)
     ++j_max;
-  cv::Rect rect(i_min, j_min, i_max - i_min + 1, j_max - j_min + 1);
+  rect_out = cv::Rect(i_min, j_min, i_max - i_min + 1, j_max - j_min + 1);
 
-  depth(rect).copyTo(depth_out);
-  image(rect).copyTo(image_out);
-  mask(rect).copyTo(mask_out);
+  depth(rect_out).copyTo(depth_out);
+  image(rect_out).copyTo(image_out);
+  mask(rect_out).copyTo(mask_out);
 }

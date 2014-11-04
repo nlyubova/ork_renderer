@@ -86,7 +86,29 @@ public:
   }
 
   void
-  render(cv::Mat &image_out, cv::Mat &depth_out, cv::Mat &mask_out);
+  reinit();
+
+  void
+  render(cv::Mat &image_out, cv::Mat &depth_out, cv::Mat &mask_out, cv::Rect &rect_out);
+
+  //temporal--start
+  void
+  render_known(const cv::Vec3d t, cv::Mat &image_out, cv::Mat &depth_out, cv::Mat &mask_out, cv::Rect &rect_out);
+
+  void
+  view_params_known(cv::Vec3d &T, cv::Vec3d &up, cv::Vec3d T_coincide=cv::Vec3d(0, 0, 1)) const;
+
+  cv::Matx33d
+  R_cam_known(const cv::Vec3d t) const;
+
+  cv::Matx33d
+  R_obj_known(const cv::Vec3d t) const;
+
+  cv::Vec3d
+  T_known(const cv::Vec3d t_in);
+
+
+  //temporal--end
 
   /**
    * @return the rotation of the camera with respect to the current view point
@@ -136,6 +158,7 @@ private:
    */
   void
   view_params(cv::Vec3d &T, cv::Vec3d &up, cv::Vec3d T_coincide=cv::Vec3d(0, 0, 1)) const;
+
 };
 
 #endif /* ORK_RENDERER_UTILS_H */

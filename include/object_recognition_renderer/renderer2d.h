@@ -78,7 +78,7 @@ public:
    * @param mask_out the mask image
    */
   void
-  render(cv::Mat &image_out, cv::Mat &depth_out, cv::Mat &mask_out) const;
+  render(cv::Mat &image_out, cv::Mat &depth_out, cv::Mat &mask_out, cv::Rect &rect_out) const;
 
 protected:
   /** Path of the mesh */
