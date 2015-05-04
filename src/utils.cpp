@@ -75,6 +75,12 @@ RendererIterator::operator++()
   return *this;
 }
 
+/**
+ * @param image_out the RGB image
+ * @param depth_out the depth image
+ * @param mask_out the mask image
+ * @param rect_out the bounding box of the rendered image
+ */
 void
 RendererIterator::reinit()
 {
@@ -93,7 +99,9 @@ RendererIterator::render(cv::Mat &image_out, cv::Mat &depth_out, cv::Mat &mask_o
   view_params(t, up);
 
   renderer_->lookAt(t(0), t(1), t(2), up(0), up(1), up(2));
-  renderer_->render(image_out, depth_out, mask_out, rect_out);
+  //renderer_->render(image_out, depth_out, mask_out, rect_out);
+  renderer_->renderDepthOnly(depth_out, mask_out, rect_out);
+  renderer_->renderImageOnly(image_out, rect_out);
 }
 
 void
@@ -113,6 +121,51 @@ RendererIterator::T_known(const cv::Vec3d t_in)
 
   return -t;
 }
+
+/**
+ * @param image_out the RGB image
+ * @param depth_out the depth image
+ * @param mask_out the mask image
+ * @param rect_out the bounding box of the rendered image
+ * @param t the translation vector
+ * @param up the up vector of the view point
+ */
+void
+RendererIterator::render(cv::Mat &image_out, cv::Mat &depth_out, cv::Mat &mask_out, cv::Rect &rect_out, const cv::Vec3d &t, const cv::Vec3d &up)
+{
+  renderer_->lookAt(t(0), t(1), t(2), up(0), up(1), up(2));
+  renderer_->renderDepthOnly(depth_out, mask_out, rect_out);
+  renderer_->renderImageOnly(image_out, rect_out);
+}
+
+/**
+ * @param depth_out the depth image
+ * @param mask_out the mask image
+ * @param rect_out the bounding box of the rendered image
+ * @param t the translation vector
+ * @param up the up vector of the view point
+ */
+void
+RendererIterator::renderDepthOnly(cv::Mat &depth_out, cv::Mat &mask_out, cv::Rect &rect_out, const cv::Vec3d &t, const cv::Vec3d &up)
+{
+  renderer_->lookAt(t(0), t(1), t(2), up(0), up(1), up(2));
+  renderer_->renderDepthOnly(depth_out, mask_out, rect_out);
+}
+
+/**
+ * @param image_out
+ * @param rect_out
+ * @param t the translation vector
+ * @param up the up vector of the view point
+ */
+
+void
+RendererIterator::renderImageOnly(cv::Mat &image_out, const cv::Rect &rect_out, const cv::Vec3d &t, const cv::Vec3d &up)
+{
+  renderer_->lookAt(t(0), t(1), t(2), up(0), up(1), up(2));
+  renderer_->renderImageOnly(image_out, rect_out);
+}
+
 
 /**
  * @return the rotation of the camera with respect to the current view point
@@ -144,7 +197,7 @@ RendererIterator::R() const
 }
 
 /**
- * @return the rotation of the mesh with respect to the current view point
+ * @return the rotation of the object with respect to the current view point
  */
 cv::Matx33d
 RendererIterator::R_obj() const
@@ -192,8 +245,9 @@ RendererIterator::R_cam_known(const cv::Vec3d t_in) const
   //cv::Vec3d y = t.cross(up);
   cv::Mat R_full = (cv::Mat_<double>(3, 3) << t(0), t(1), t(2), y(0), y(1), y(2), up(0), up(1), up(2));
   cv::Matx33d R = R_full;
+  R = R.t();
 
-  return R;
+  return R.inv();
 }
 
 cv::Matx33d
@@ -215,6 +269,9 @@ RendererIterator::R_obj_known(const cv::Vec3d t_in) const
                       up(0), up(1), up(2));
 }
 
+/**
+ * @return the distance from the current camera position to the object origin
+ */
 float
 RendererIterator::D_obj() const
 {
@@ -230,7 +287,7 @@ RendererIterator::T() const
   cv::Vec3d t, _up;
   view_params(t, _up);
 
-  return -t; //t
+  return -t;
 }
 
 /**
@@ -248,33 +305,31 @@ RendererIterator::n_templates() const
  */
 
 void
-RendererIterator::view_params(cv::Vec3d &T, cv::Vec3d &up, cv::Vec3d T_coincide) const
+RendererIterator::view_params(cv::Vec3d &T, cv::Vec3d &up) const
 {
   float angle_rad = angle_ * CV_PI / 180.;
 
   // from http://www.xsi-blog.com/archives/115
+  // compute the Point(x, y ,z) on the sphere based on index_ and radius_ using Golden Spiral technique
   static float inc = CV_PI * (3 - sqrt(5));
   static float off = 2.0f / float(n_points_);
-
   float y = index_ * off - 1.0f + (off / 2.0f);
   float r = sqrt(1.0f - y * y);
   float phi = index_ * inc;
   float x = std::cos(phi) * r;
   float z = std::sin(phi) * r;
 
-  //T = cv::Vec3d(x, y, z); //do not forget !!!!
-
-  float lat = std::acos(z), lon; //z
-  if ((fabs(std::sin(lat)) < 1e-5) || (fabs(y / std::sin(lat)) > 1)) //y
+  float lat = std::acos(z), lon;
+  if ((fabs(std::sin(lat)) < 1e-5) || (fabs(y / std::sin(lat)) > 1))
     lon = 0;
   else
-    lon = std::asin(y / std::sin(lat)); //y
+    lon = std::asin(y / std::sin(lat));
 
   x *= radius_; // * cos(lon) * sin(lat);
   y *= radius_; //float y = radius * sin(lon) * sin(lat);
   z *= radius_; //float z = radius * cos(lat);
 
-  T = cv::Vec3d(x, y, z); //do not forget !!!!
+  T = cv::Vec3d(x, y, z);
 
   // Figure out the up vector
   float x_up = radius_ * std::cos(lon) * std::sin(lat - 1e-5) - x;

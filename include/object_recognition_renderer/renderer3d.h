@@ -50,6 +50,8 @@
 class Model;
 class aiLogStream;
 
+class Renderer3dImpl;
+
 /** Class that displays a scene in a Frame Buffer Object
  * Inspired by http://www.songho.ca/opengl/gl_fbo.html
  */
@@ -82,24 +84,27 @@ public:
    * @param image_out the RGB image
    * @param depth_out the depth image
    * @param mask_out the mask image
+   * @param rect_out the bounding box of the rendered image
    */
   void
   render(cv::Mat &image_out, cv::Mat &depth_out, cv::Mat &mask_out, cv::Rect &rect_out) const;
 
+  /** Renders the depth image from the current OpenGL buffers
+   * @param depth_out the depth image
+   * @param mask_out the mask image
+   * @param rect_out the bounding box of the rendered image
+   */
+  void
+  renderDepthOnly(cv::Mat &depth_out, cv::Mat &mask_out, cv::Rect &rect_out) const;
+
+  /** Renders the RGB image from the current OpenGL buffers
+   * @param image_out the RGB image
+   * @param rect_out the bounding box of the rendered image
+   */
+  void
+  renderImageOnly(cv::Mat &image_out, const cv::Rect &rect_out) const;
+
 protected:
-  virtual void
-  clean_buffers() = 0;
-
-  virtual void
-  set_parameters_low_level() = 0;
-
-  virtual void
-  bind_buffers() const = 0;
-
-  /** Path of the mesh */
-  std::string mesh_path_;
-
-  unsigned int width_, height_;
   double focal_length_x_, focal_length_y_, near_, far_;
   float angle_;
 
@@ -108,6 +113,9 @@ protected:
 
   /** stream for storing the logs from Assimp */
   aiLogStream* ai_stream_;
+
+  /** Private implementation of the renderer (GLUT or OSMesa) */
+  Renderer3dImpl* renderer_;
 };
 
 #endif /* ORK_RENDERER_RENDERER3D_H_ */

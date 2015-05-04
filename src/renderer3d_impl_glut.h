@@ -3,7 +3,6 @@
  *
  *  Copyright (c) 2012, Willow Garage, Inc.
  *  Copyright (c) 2013, Vincent Rabaud
- *  Copyright (c) 2013, Aldebaran Robotics
  *  All rights reserved.
  *
  *  Redistribution and use in source and binary forms, with or without
@@ -35,64 +34,49 @@
  *
  */
 
-#ifndef ORK_RENDERER_RENDERER_H_
-#define ORK_RENDERER_RENDERER_H_
+#ifndef ORK_RENDERER_RENDERER3D_IMPL_GLUT_H_
+#define ORK_RENDERER_RENDERER3D_IMPL_GLUT_H_
 
-#include <string>
+#include "renderer3d_impl_base.h"
 
-#include <opencv2/core/core.hpp>
+// Make sure we define that so that we have FBO enabled
+#define GL_GLEXT_PROTOTYPES
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-/** Base class to render a 3d or 2d scene under different view points
+/** Class that displays a scene in a Frame Buffer Object
+ * Inspired by http://www.songho.ca/opengl/gl_fbo.html
  */
-class Renderer
+class Renderer3dImpl : public Renderer3dImplBase
 {
 public:
-  Renderer() {};
-
-  virtual
-  ~Renderer() {};
-
-  /** Similar to the gluLookAt function
-   * @param x the x position of the eye point
-   * @param y the y position of the eye point
-   * @param z the z position of the eye point
-   * @param upx the x direction of the up vector
-   * @param upy the y direction of the up vector
-   * @param upz the z direction of the up vector
+  /**
+   * @param file_path the path of the mesh file
    */
-  virtual void
-  lookAt(double x, double y, double z, double upx, double upy, double upz) = 0;
+  Renderer3dImpl(const std::string & file_path, int width, int height);
 
-  /** Renders the content of the current OpenGL buffers to images
-   * @param image_out the RGB image
-   * @param depth_out the depth image
-   * @param mask_out the mask image
-   * @param rect_out the bounding box of the rendered image
-   */
-  virtual void
-  render(cv::Mat &image_out, cv::Mat &depth_out, cv::Mat &mask_out, cv::Rect &rect_out) const = 0;
+  ~Renderer3dImpl()
+  {
+    clean_buffers();
+  }
 
-  /** Renders the depth image from the current OpenGL buffers
-   * @param depth_out the depth image
-   * @param mask_out the mask image
-   * @param rect_out the bounding box of the rendered image
-   */
   virtual void
-  renderDepthOnly(cv::Mat &depth_out, cv::Mat &mask_out, cv::Rect &rect_out) const = 0;
+  clean_buffers();
 
-  /** Renders the RGB image from the current OpenGL buffers
-   * @param image_out the RGB image
-   * @param rect_out the bounding box of the rendered image
-   */
   virtual void
-  renderImageOnly(cv::Mat &image_out, const cv::Rect &rect_out) const = 0;
+  set_parameters_low_level();
 
-protected:
-  unsigned int width_, height_;
-  double focal_length_x_, focal_length_y_, near_, far_;
-  float angle_;
+  virtual void
+  bind_buffers() const;
+
+  /** States whether GLUT has been initialized or not */
+  bool is_glut_initialized_;
+  /** The frame buffer object used for offline rendering */
+  GLuint fbo_id_;
+  /** The render buffer object used for offline depth rendering */
+  GLuint rbo_id_;
+  /** The render buffer object used for offline image rendering */
+  GLuint texture_id_;
 };
 
-#endif /* ORK_RENDERER_RENDERER_H_ */
+#endif /* ORK_RENDERER_RENDERER3D_IMPL_GLUT_H_ */
